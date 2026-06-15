@@ -1,0 +1,13 @@
+-----flowdesk-----
+
+1.backend:
+
+sepearetd backend code to models,schemas,routes, dependenecies and utility files
+
+generated tracking codes at creation time
+
+implemengted backend pagination and also handled it in api level
+
+
+2. frontend:
+sepearetd api communication from components
