@@ -1,33 +1,29 @@
+import axios from 'axios';
 import { ShipmentListResponse } from './types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-export async function fetchShipments(params: {
-  page: number;
-  page_size: number;
+export async function getShipments(params?: {
+  status?: string;
+  page_size?: number;
+  page?: number;
   origin?: string;
   destination?: string;
-  status?: string;
 }): Promise<ShipmentListResponse> {
-  const queryParams = new URLSearchParams();
-  queryParams.set('page', params.page.toString());
-  queryParams.set('page_size', params.page_size.toString());
+  const response = await api.get<ShipmentListResponse>('/shipments', {
+    params: {
+      status: params?.status,
+      page_size: params?.page_size,
+      page: params?.page,
+      origin: params?.origin,
+      destination: params?.destination,
+    },
+  });
 
-  if (params.origin) {
-    queryParams.set('origin', params.origin);
-  }
-  if (params.destination) {
-    queryParams.set('destination', params.destination);
-  }
-  if (params.status) {
-    queryParams.set('status', params.status);
-  }
-
-  const response = await fetch(`${BASE_URL}/shipments?${queryParams.toString()}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch shipments');
-  }
-
-  return response.json();
+  return response.data;
 }

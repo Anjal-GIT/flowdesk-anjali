@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fetchShipments } from './api';
+import { getShipments } from './api';
+import ShipmentTable from './shipmenttable';
 import { Shipment, ShipmentListResponse } from './types';
 
 const DEFAULT_PAGE_SIZE = 5;
@@ -13,23 +14,33 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [originFilter, setOriginFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     loadShipments(page, pageSize);
   }, [page, pageSize]);
 
-  async function loadShipments(pageNumber: number, pageSizeNumber: number) {
+  async function loadShipments(
+    pageNumber: number,
+    pageSizeNumber: number,
+    status?: string,
+    origin?: string,
+    destination?: string,
+  ) {
     setLoading(true);
     setError(null);
 
+    const effectiveStatus = status ?? (statusFilter === 'all' ? undefined : statusFilter);
+    const effectiveOrigin = origin ?? (originFilter || undefined);
+    const effectiveDestination = destination ?? (destinationFilter || undefined);
+
     try {
-      const response: ShipmentListResponse = await fetchShipments({
+      const response: ShipmentListResponse = await getShipments({
         page: pageNumber,
         page_size: pageSizeNumber,
-        origin: originFilter || undefined,
-        destination: destinationFilter || undefined,
-        status: statusFilter || undefined,
+        status: effectiveStatus,
+        origin: effectiveOrigin,
+        destination: effectiveDestination,
       });
 
       setShipments(response.items);
@@ -49,9 +60,16 @@ function App() {
   function handleClear() {
     setOriginFilter('');
     setDestinationFilter('');
-    setStatusFilter('');
+    setStatusFilter('all');
     setPage(1);
-    loadShipments(1, pageSize);
+    loadShipments(1, pageSize, undefined, undefined, undefined);
+  }
+
+  function handleStatusChange(value: string) {
+    setStatusFilter(value);
+    setPage(1);
+    const statusQuery = value === 'all' ? undefined : value;
+    loadShipments(1, pageSize, statusQuery, originFilter || undefined, destinationFilter || undefined);
   }
 
   return (
@@ -89,9 +107,9 @@ function App() {
           <select
             id="status"
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
+            onChange={(event) => handleStatusChange(event.target.value)}
           >
-            <option value="">All statuses</option>
+            <option value="all">All statuses</option>
             <option value="pending">Pending</option>
             <option value="in_transit">In Transit</option>
             <option value="delivered">Delivered</option>
@@ -122,32 +140,7 @@ function App() {
         ) : shipments.length === 0 ? (
           <div className="empty-state">No shipments found.</div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Tracking</th>
-                <th>Origin</th>
-                <th>Destination</th>
-                <th>Status</th>
-                <th>Weight (kg)</th>
-                <th>Created At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shipments.map((shipment) => (
-                <tr key={shipment.id}>
-                  <td>{shipment.id}</td>
-                  <td>{shipment.tracking_code}</td>
-                  <td>{shipment.origin}</td>
-                  <td>{shipment.destination}</td>
-                  <td>{shipment.status}</td>
-                  <td>{shipment.weight_kg}</td>
-                  <td>{new Date(shipment.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ShipmentTable shipments={shipments} />
         )}
 
         <div className="pagination">
