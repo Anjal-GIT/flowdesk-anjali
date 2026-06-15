@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database import get_db
 from app.models import Shipment, ShipmentStatus
-from app.schemas import ShipmentCreate, ShipmentUpdate, ShipmentResponse, ShipmentDetailResponse
+from app.schemas import ShipmentCreate, ShipmentUpdate, ShipmentResponse, ShipmentListResponse
 from app.dependencies import verify_api_key
 import uuid
 
@@ -48,7 +48,6 @@ async def create_shipment(
     - origin: Shipment origin location
     - destination: Shipment destination location
     - weight_kg: Weight in kilograms
-    - status: Shipment status (optional, defaults to 'pending')
     
     **Returns:**
     - Created shipment with auto-generated tracking code
@@ -60,7 +59,7 @@ async def create_shipment(
         origin=shipment.origin,
         destination=shipment.destination,
         weight_kg=shipment.weight_kg,
-        status=ShipmentStatus(shipment.status),
+        status=ShipmentStatus.PENDING,
     )
     
     db.add(db_shipment)
@@ -72,32 +71,53 @@ async def create_shipment(
 
 @router.get(
     "/",
-    response_model=list[ShipmentResponse],
-    summary="List all shipments"
+    response_model=ShipmentListResponse,
+    summary="List shipments"
 )
 async def list_shipments(
     db: Session = Depends(get_db),
-    api_key: str = Depends(verify_api_key),
-    skip: int = 0,
-    limit: int = 100,
+    origin: str | None = None,
+    destination: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 5,
 ):
     """
-    Retrieve all shipments with pagination.
+    List shipments with optional filters and pagination.
     
-    **Required Header:**
-    - X-API-Key: Your API key
+    This endpoint does not require authentication.
     
-    **Query parameters:**
-    - skip: Number of records to skip (default: 0)
-    - limit: Maximum records to return (default: 100)
+    Query parameters:
+    - origin: filter by origin
+    - destination: filter by destination
+    - status: filter by shipment status
+    - page: page number (default: 1)
+    - page_size: page size (default: 5)
     """
-    shipments = db.query(Shipment).offset(skip).limit(limit).all()
-    return shipments
+    query = db.query(Shipment)
+
+    if origin:
+        query = query.filter(Shipment.origin.ilike(f"%{origin}%"))
+    if destination:
+        query = query.filter(Shipment.destination.ilike(f"%{destination}%"))
+    if status:
+        query = query.filter(Shipment.status == ShipmentStatus(status))
+
+    total = query.count()
+    offset = (page - 1) * page_size
+    shipments = query.order_by(Shipment.id).offset(offset).limit(page_size).all()
+
+    return ShipmentListResponse(
+        items=shipments,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get(
     "/{shipment_id}",
-    response_model=ShipmentDetailResponse,
+    response_model=ShipmentResponse,
     summary="Get shipment by ID"
 )
 async def get_shipment(
@@ -127,7 +147,7 @@ async def get_shipment(
 
 @router.get(
     "/tracking/{tracking_code}",
-    response_model=ShipmentDetailResponse,
+    response_model=ShipmentResponse,
     summary="Get shipment by tracking code"
 )
 async def get_shipment_by_tracking(
@@ -157,7 +177,7 @@ async def get_shipment_by_tracking(
 
 @router.patch(
     "/{shipment_id}",
-    response_model=ShipmentDetailResponse,
+    response_model=ShipmentResponse,
     summary="Update shipment"
 )
 async def update_shipment(
